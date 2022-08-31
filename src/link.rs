@@ -1,4 +1,3 @@
-use base32::{self, Alphabet};
 use diesel::{self, prelude::*};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -7,7 +6,10 @@ use crate::DbConn;
 
 use self::schema::links;
 
-#[derive(Queryable, Insertable, Serialize, Deserialize, Clone)]
+const HASH_LENGTH: usize = 8;
+
+#[derive(Queryable, Insertable, Serialize, Deserialize, Clone, AsChangeset, Identifiable)]
+#[table_name = "links"]
 pub struct Link {
     pub id: i32,
     pub url: String,
@@ -20,8 +22,8 @@ impl Link {
     pub async fn insert(url: String, expires_in: Option<usize>, conn: &DbConn) -> LinkResult {
         conn.run(move |c| {
             let trimmed_url = url.trim_end_matches('/').to_string();
-            let expires_at = expires_in.map(|seconds| {
-                chrono::Utc::now().naive_utc() + chrono::Duration::seconds(seconds as i64)
+            let expires_at = expires_in.map(|minutes| {
+                chrono::Utc::now().naive_utc() + chrono::Duration::minutes(minutes as i64)
             });
             let hash = hash_url(&trimmed_url);
             let new_link = NewLink {
@@ -34,6 +36,7 @@ impl Link {
                 Ok(link) => link,
                 Err(_) => return Err("Link not found".to_string()),
             };
+
             let errors = link.validate();
 
             if !errors.is_empty() {
@@ -57,6 +60,24 @@ impl Link {
         .await
     }
 
+    pub async fn delete_all(conn: &DbConn) -> QueryResult<usize> {
+        conn.run(|c| diesel::delete(links::table).execute(c)).await
+    }
+
+    pub async fn save(self, conn: &DbConn) -> LinkResult {
+        conn.run(move |c| {
+            match self.save_changes(c) {
+                Ok(link) => Ok(link),
+                Err(e) => Err(e.to_string()),
+            }
+        })
+        .await
+    }
+
+    pub fn redirect_url(&self) -> String {
+        format!("{}/{}", dotenv!("WHO_AM_I"), self.hash)
+    }
+
     pub fn expired(&self) -> bool {
         self.expires_at.is_some() && self.expires_at.unwrap() < chrono::Utc::now().naive_utc()
     }
@@ -66,9 +87,7 @@ impl Link {
 
         if self.url.is_empty() {
             errors.push("URL cannot be empty".to_string());
-        }
-
-        if Url::parse(&self.url).is_err() {
+        } else if Url::parse(&self.url).is_err() {
             errors.push("Invalid URL".to_string());
         }
 
@@ -77,7 +96,11 @@ impl Link {
 }
 
 fn hash_url(url: &String) -> String {
-    base32::encode(Alphabet::Crockford, url.as_bytes()).to_lowercase()[..8].to_string()
+    let raw_hash = base64_url::encode(&fasthash::xxh3::hash64(url).to_string());
+    let mut hash = base64_url::escape(&raw_hash).to_string().to_lowercase();
+    hash.truncate(HASH_LENGTH);
+
+    hash
 }
 
 #[derive(Serialize, Deserialize, Insertable)]
@@ -90,7 +113,7 @@ struct NewLink {
 
 pub type LinkResult = Result<Link, String>;
 
-mod schema {
+pub mod schema {
     table! {
         links (id) {
             id -> Int4,

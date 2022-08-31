@@ -4,20 +4,20 @@ use serde::{Deserialize, Serialize};
 use crate::link::Link;
 
 #[derive(Serialize, Deserialize)]
-pub struct LinkData {
+pub struct LinkRequest {
     pub url: String,
     pub expires_in: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Error {
-    error: String,
+    pub error: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct LinkResponse {
     id: i32,
-    new_url: String,
+    pub short_url: String,
     expires_at: Option<chrono::NaiveDateTime>,
 }
 
@@ -25,7 +25,7 @@ impl From<Link> for LinkResponse {
     fn from(link: Link) -> Self {
         LinkResponse {
             id: link.id,
-            new_url: format!("{}/{}", std::env::var("WHO_AM_I").unwrap(), link.hash),
+            short_url: link.redirect_url(),
             expires_at: link.expires_at,
         }
     }
@@ -70,17 +70,28 @@ impl APIResult {
     }
 }
 
-pub struct APIRedirect;
+#[derive(Responder)]
+pub enum APIRedirect {
+    #[response(status = 303)]
+    To(Redirect),
+    #[response(status = 404)]
+    NotFound(Redirect)
+}
 
 impl APIRedirect {
-    pub fn to(link: Result<Link, String>) -> Redirect {
-        match link {
-            Ok(link) => Redirect::to(format!(
-                "{}/{}",
-                std::env::var("WHO_AM_I").unwrap(),
-                link.hash
-            )),
-            Err(_) => Redirect::to("/static/404.html"),
+    pub fn not_found() -> Self {
+        APIRedirect::NotFound(Redirect::to("/static/404.html"))
+    }
+}
+
+impl From<Link> for APIRedirect {
+    fn from(link: Link) -> Self {
+        dbg!(link.expired());
+
+        if link.expired() {
+            return Self::not_found()
         }
+
+        Self::To(Redirect::to(link.url))
     }
 }

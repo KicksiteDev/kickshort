@@ -12,8 +12,10 @@ rocket_sync_db_pools = { version = "0.1.0-rc.2", features = ["diesel_postgres_po
 chrono = { version = "0.4.22", features = ["serde"] }
 serde = "1.0.144"
 diesel_migrations = { version = "1.4.0", features = ["postgres"] }
-base32 = "0.4.0"
 map-macro = "0.2.4"
 url = "2.2.2"
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
+parking_lot = "0.12.1"
+base64-url = "1.4.13"
+fasthash = { git = "https://github.com/flier/rust-fasthash" }

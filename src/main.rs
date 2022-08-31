@@ -41,7 +41,7 @@ const DATABASE_URL: &str = dotenv!("DATABASE_URL_TEST");
 const DB_NAME: &str = "url_shorten_test";
 
 #[post("/", data = "<link_data>", format = "application/json")]
-async fn new(link_data: Json<LinkData>, conn: DbConn) -> APIResult {
+async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
     let expires_in = link_data.expires_in;
 
@@ -52,10 +52,13 @@ async fn new(link_data: Json<LinkData>, conn: DbConn) -> APIResult {
 }
 
 #[get("/<hash>")]
-async fn redirect(hash: String, conn: DbConn) -> Redirect {
+async fn redirect(hash: String, conn: DbConn) -> APIRedirect {
     let link = Link::find_by_hash(hash, &conn).await;
 
-    APIRedirect::to(link)
+    match link {
+        Ok(link) => APIRedirect::from(link),
+        Err(_) => APIRedirect::not_found(),
+    }
 }
 
 #[get("/")]
@@ -115,36 +118,131 @@ fn rocket() -> _ {
         .register("/", catchers![not_found])
         .mount("/static", FileServer::from("static"))
         .mount("/api/links", routes![new])
-        .register("/api/links", catchers![unprocessable_entity, bad_request, internal_server_error])
+        .register(
+            "/api/links",
+            catchers![unprocessable_entity, bad_request, internal_server_error],
+        )
 }
 
-// TODO: Technically these stop working with more tests,
-// because they run in parallel and connect to the same database
-// so it runs out of clients
 #[cfg(test)]
 mod test {
-    use super::rocket;
-    use rocket::http::{Header, Status};
-    use rocket::local::blocking::Client;
+    use crate::api::Error;
+    use crate::api::LinkResponse;
 
-    #[test]
-    fn new_invalid() {
-        let client = Client::tracked(rocket()).expect("valid rocket instance");
-        let response = client
-            .post("/api/links")
-            .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "invalid-gaming"}"#)
-            .dispatch();
-        assert_eq!(response.status(), Status::UnprocessableEntity);
+    use super::rocket;
+    use super::Link;
+    use rocket::http::{Header, Status};
+    use rocket::local::asynchronous::Client;
+
+    static DB_LOCK: parking_lot::Mutex<()> = parking_lot::const_mutex(());
+
+    macro_rules! run_test {
+        (|$client:ident, $conn:ident| $block:expr) => {{
+            let _lock = DB_LOCK.lock();
+
+            rocket::async_test(async move {
+                let $client = Client::tracked(super::rocket())
+                    .await
+                    .expect("Rocket client");
+                let db = super::DbConn::get_one($client.rocket()).await;
+                let $conn = db.expect("failed to get database connection for testing");
+
+                Link::delete_all(&$conn).await.expect("failed to delete links");
+
+                $block
+            })
+        }};
     }
 
     #[test]
-    fn new_valid() {
-        let client = Client::tracked(rocket()).expect("valid rocket instance");
-        let response = client
-            .post("/api/links")
-            .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "https://www.google.com" }"#).dispatch();
-        assert_eq!(response.status(), Status::Created);
+    fn invalid_expiration_date() {
+        run_test!(|client, conn| {
+            let response = client
+                .post("/api/links")
+                .header(Header::new("Content-Type", "application/json"))
+                .body(r#"{"url": "https://www.google.com", "expires_in": -1 }"#)
+                .dispatch()
+                .await;
+            assert_eq!(response.status(), Status::UnprocessableEntity);
+            assert_eq!(response.into_json::<Error>().await.unwrap().error, "Unprocessable Entity; A data type is most likely wrong");
+        })
+    }
+
+    #[test]
+    fn invalid_url() {
+        run_test!(|client, conn| {
+            let response = client
+                .post("/api/links")
+                .header(Header::new("Content-Type", "application/json"))
+                .body(r#"{"url": "invalid url", "expires_in": 15 }"#)
+                .dispatch()
+                .await;
+            assert_eq!(response.status(), Status::UnprocessableEntity);
+            assert_eq!(response.into_json::<Error>().await.unwrap().error, "Invalid URL");
+        })
+    }
+
+    #[test]
+    fn blank_url() {
+        run_test!(|client, conn| {
+            let response = client
+                .post("/api/links")
+                .header(Header::new("Content-Type", "application/json"))
+                .body(r#"{"url": "", "expires_in": 15 }"#)
+                .dispatch()
+                .await;
+            assert_eq!(response.status(), Status::UnprocessableEntity);
+            assert_eq!(response.into_json::<Error>().await.unwrap().error, "URL cannot be empty");
+        })
+    }
+
+    #[test]
+    fn redirect_not_expired() {
+        run_test!(|client, _conn| {
+            let response = client
+                .post("/api/links")
+                .header(Header::new("Content-Type", "application/json"))
+                .body(r#"{"url": "https://www.google.com", "expires_in": 1000 }"#)
+                .dispatch()
+                .await;
+
+            assert_eq!(response.status(), Status::Created);
+
+            let hash = response.into_json::<LinkResponse>().await.unwrap().short_url.replace(
+                dotenv!("WHO_AM_I"),
+                ""
+            );
+
+            let response = client.get(hash).dispatch().await;
+
+            assert_eq!(response.status(), Status::SeeOther);
+        })
+    }
+
+    #[test]
+    fn redirect_expired() {
+        run_test!(|client, conn| {
+            let response = client
+                .post("/api/links")
+                .header(Header::new("Content-Type", "application/json"))
+                .body(r#"{"url": "https://www.google.com" }"#)
+                .dispatch()
+                .await;
+
+            assert_eq!(response.status(), Status::Created);
+
+            let hash = response.into_json::<LinkResponse>().await.unwrap().short_url.replace(
+                dotenv!("WHO_AM_I"),
+                ""
+            );
+
+            let mut link = Link::find_by_hash(hash[1..].to_string(), &conn).await.unwrap();
+            link.expires_at = Some(chrono::Utc::now().naive_utc() - chrono::Duration::seconds(100));
+            link.save(&conn).await.unwrap();
+
+            let response = client.get(hash).dispatch().await;
+
+            assert_eq!(response.status(), Status::NotFound);
+        })
     }
 }
