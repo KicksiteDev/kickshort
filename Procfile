@@ -1,1 +1,1 @@
-web: ROCKET_PORT=$PORT ROCKET_KEEP_ALIVE=0 ./target/release/link-shorten-demo
+web: ./target/release/link-shorten-demo
