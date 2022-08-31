@@ -1,1 +1,1 @@
-web: ./target/release/link-shorten-demo
+web: ./target/release/url_shorten
