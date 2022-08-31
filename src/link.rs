@@ -84,7 +84,9 @@ impl Link {
     }
 
     pub fn redirect_url(&self) -> String {
-        format!("{}/{}", env!("WHO_AM_I"), self.hash)
+        let who_am_i = std::env::var("WHO_AM_I").unwrap_or_else(|_| "idk".to_string());
+
+        format!("{}/{}", who_am_i, self.hash)
     }
 
     pub fn expired(&self) -> bool {
