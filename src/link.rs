@@ -84,7 +84,7 @@ impl Link {
     }
 
     pub fn redirect_url(&self) -> String {
-        format!("{}/{}", dotenv!("WHO_AM_I"), self.hash)
+        format!("{}/{}", env!("WHO_AM_I"), self.hash)
     }
 
     pub fn expired(&self) -> bool {

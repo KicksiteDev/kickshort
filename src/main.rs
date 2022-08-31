@@ -12,13 +12,10 @@ extern crate rocket_sync_db_pools;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
-#[macro_use]
-extern crate dotenv_codegen;
 
 use crate::api::*;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
-use dotenv::dotenv;
 use link::Link;
 use map_macro::map;
 use rocket::fairing::AdHoc;
@@ -32,13 +29,13 @@ use rocket::{Build, Rocket};
 pub struct DbConn(diesel::PgConnection);
 
 #[cfg(not(test))]
-const DATABASE_URL: &str = dotenv!("DATABASE_URL");
+const DATABASE_URL: &str = env!("DATABASE_URL");
 
 #[cfg(not(test))]
 const DB_NAME: &str = "url_shorten";
 
 #[cfg(test)]
-const DATABASE_URL: &str = dotenv!("DATABASE_URL_TEST");
+const DATABASE_URL: &str = env!("DATABASE_URL_TEST");
 
 #[cfg(test)]
 const DB_NAME: &str = "url_shorten_test";
@@ -106,8 +103,6 @@ async fn run_migrations(rocket: Rocket<Build>) -> Rocket<Build> {
 
 #[launch]
 fn rocket() -> _ {
-    dotenv().ok();
-
     PgConnection::establish(DATABASE_URL)
         .unwrap_or_else(|_| panic!("Error connecting to {}", DATABASE_URL));
 
