@@ -107,7 +107,8 @@ fn rocket() -> _ {
         .unwrap_or_else(|_| panic!("Error connecting to {}", DATABASE_URL));
 
     let figment = rocket::Config::figment()
-        .merge(("databases", map![DB_NAME => map!("url" => DATABASE_URL)]));
+        .merge(("databases", map![DB_NAME => map!("url" => DATABASE_URL)]))
+        .merge(("databases", map![DB_NAME => map!("pool_size" => 5)]));
 
     rocket::custom(figment)
         .attach(DbConn::fairing())
