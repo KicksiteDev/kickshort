@@ -2,13 +2,16 @@ use diesel::{self, prelude::*};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use rand::distributions::{Alphanumeric, DistString};
+
 use crate::DbConn;
 
 use self::schema::links;
 
+const HASH_FUDGE_LENGTH: usize = 6;
 const HASH_LENGTH: usize = 8;
 
-#[derive(Queryable, Insertable, Serialize, Deserialize, Clone, AsChangeset, Identifiable)]
+#[derive(Queryable, Insertable, Serialize, Deserialize, Clone, AsChangeset, Identifiable, Debug)]
 #[table_name = "links"]
 pub struct Link {
     pub id: i32,
@@ -20,17 +23,25 @@ pub struct Link {
 
 impl Link {
     pub async fn insert(url: String, expires_in: Option<usize>, conn: &DbConn) -> LinkResult {
+        let trimmed_url = url.trim_end_matches('/').to_string();
+        let expires_at = expires_in.map(|minutes| {
+            chrono::Utc::now().naive_utc() + chrono::Duration::minutes(minutes as i64)
+        });
+        let mut hash = hash_url(&trimmed_url);
+
+        // `hash_url` is pretty much guaranteed to be unique, but on the astronomically rare
+        // chance that it isn't, we'll just keep trying
+        while Link::find_by_hash(hash.clone(), conn).await.is_ok() {
+            hash = hash_url(&trimmed_url);
+        }
+
+        let new_link = NewLink {
+            url: trimmed_url,
+            hash,
+            expires_at,
+        };
+
         conn.run(move |c| {
-            let trimmed_url = url.trim_end_matches('/').to_string();
-            let expires_at = expires_in.map(|minutes| {
-                chrono::Utc::now().naive_utc() + chrono::Duration::minutes(minutes as i64)
-            });
-            let hash = hash_url(&trimmed_url);
-            let new_link = NewLink {
-                url: trimmed_url,
-                hash,
-                expires_at,
-            };
             let query = diesel::insert_into(links::table).values(&new_link);
             let link = match query.get_result::<Self>(c) {
                 Ok(link) => link,
@@ -65,11 +76,9 @@ impl Link {
     }
 
     pub async fn save(self, conn: &DbConn) -> LinkResult {
-        conn.run(move |c| {
-            match self.save_changes(c) {
-                Ok(link) => Ok(link),
-                Err(e) => Err(e.to_string()),
-            }
+        conn.run(move |c| match self.save_changes(c) {
+            Ok(link) => Ok(link),
+            Err(e) => Err(e.to_string()),
         })
         .await
     }
@@ -96,11 +105,13 @@ impl Link {
 }
 
 fn hash_url(url: &String) -> String {
-    let raw_hash = base64_url::encode(&fasthash::xxh3::hash64(url).to_string());
-    let mut hash = base64_url::escape(&raw_hash).to_string().to_lowercase();
-    hash.truncate(HASH_LENGTH);
+    let random_fudge = Alphanumeric.sample_string(&mut rand::thread_rng(), HASH_FUDGE_LENGTH);
+    let fudged_url = format!("{}{}", random_fudge, url);
+    let unsafe_hash = base64_url::encode(&fudged_url);
+    let mut url_safe_hash = base64_url::escape(&unsafe_hash).to_string().to_lowercase();
+    url_safe_hash.truncate(HASH_LENGTH);
 
-    hash
+    url_safe_hash
 }
 
 #[derive(Serialize, Deserialize, Insertable)]

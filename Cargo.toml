@@ -19,3 +19,4 @@ dotenv_codegen = "0.15.0"
 parking_lot = "0.12.1"
 base64-url = "1.4.13"
 fasthash = { git = "https://github.com/flier/rust-fasthash" }
+rand = "0.8.5"

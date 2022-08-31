@@ -1826,6 +1826,7 @@ dependencies = [
  "fasthash",
  "map-macro",
  "parking_lot",
+ "rand 0.8.5",
  "rocket",
  "rocket_sync_db_pools",
  "serde",
