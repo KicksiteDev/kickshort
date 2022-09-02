@@ -1,4 +1,4 @@
-use rocket::{response::Redirect, serde::json::Json};
+use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::link::Link;
@@ -67,31 +67,5 @@ impl APIResult {
     }
     pub fn ok(link: Link) -> Self {
         APIResult::Ok(Json(LinkResponse::from(link)))
-    }
-}
-
-#[derive(Responder)]
-pub enum APIRedirect {
-    #[response(status = 303)]
-    To(Redirect),
-    #[response(status = 404)]
-    NotFound(Redirect)
-}
-
-impl APIRedirect {
-    pub fn not_found() -> Self {
-        APIRedirect::NotFound(Redirect::to("/static/404.html"))
-    }
-}
-
-impl From<Link> for APIRedirect {
-    fn from(link: Link) -> Self {
-        dbg!(link.expired());
-
-        if link.expired() {
-            return Self::not_found()
-        }
-
-        Self::To(Redirect::to(link.url))
     }
 }

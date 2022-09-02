@@ -109,8 +109,19 @@ fn redirect_expired() {
         );
 
         let mut link = Link::find_by_hash(hash[1..].to_string(), &conn).await.unwrap();
-        link.expires_at = Some(chrono::Utc::now().naive_utc() - chrono::Duration::seconds(100));
+        link.expires_at = Some(chrono::Utc::now().naive_utc() - chrono::Duration::minutes(100));
         link.save(&conn).await.unwrap();
+
+        let response = client.get(hash).dispatch().await;
+
+        assert_eq!(response.status(), Status::NotFound);
+    })
+}
+
+#[test]
+fn redirect_bad_hash() {
+    run_test!(|client, conn| {
+        let hash = "/badhash123123123";
 
         let response = client.get(hash).dispatch().await;
 

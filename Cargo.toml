@@ -18,3 +18,4 @@ parking_lot = "0.12.1"
 base64-url = "1.4.13"
 fasthash = { git = "https://github.com/flier/rust-fasthash" }
 rand = "0.8.5"
+rocket_dyn_templates = { version = "0.1.0-rc.2", features = ["handlebars"] }

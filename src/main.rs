@@ -1,4 +1,5 @@
 mod api;
+mod cors;
 mod link;
 
 #[cfg(test)]
@@ -14,15 +15,18 @@ extern crate diesel;
 extern crate diesel_migrations;
 
 use crate::api::*;
+use crate::cors::Cors;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use link::Link;
 use map_macro::map;
 use rocket::fairing::AdHoc;
 use rocket::fs::FileServer;
+use rocket::http::Status;
 use rocket::response::Redirect;
 use rocket::serde::json::Json;
 use rocket::{Build, Rocket};
+use rocket_dyn_templates::{Template, context};
 
 #[cfg_attr(not(test), database("url_shorten"))]
 #[cfg_attr(test, database("url_shorten_test"))]
@@ -52,23 +56,28 @@ async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
 }
 
 #[get("/<hash>")]
-async fn redirect(hash: String, conn: DbConn) -> APIRedirect {
-    let link = Link::find_by_hash(hash, &conn).await;
+async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
+    let link = match Link::find_by_hash(hash, &conn).await {
+        Ok(link) => link,
+        Err(_) => return Err(Status::NotFound),
+    };
 
-    match link {
-        Ok(link) => APIRedirect::from(link),
-        Err(_) => APIRedirect::not_found(),
+    if link.expired() {
+        return Err(Status::NotFound);
     }
+
+    Ok(Redirect::to(link.url))
 }
 
-#[get("/")]
-fn index() -> Redirect {
-    Redirect::to("/static/404.html")
+// Intentionally empty, but required for preflight
+#[options("/<_..>")]
+fn options_all() -> Status {
+    Status::Ok
 }
 
 #[catch(404)]
-fn not_found() -> Redirect {
-    Redirect::to("/static/404.html")
+fn not_found() -> Template {
+    Template::render("404", context! {})
 }
 
 #[catch(400)]
@@ -111,11 +120,13 @@ fn rocket() -> _ {
         .merge(("databases", map![DB_NAME => map!("pool_size" => 5)]));
 
     rocket::custom(figment)
+        .attach(Cors)
+        .attach(Template::fairing())
         .attach(DbConn::fairing())
         .attach(AdHoc::on_ignite("Run Migrations", run_migrations))
-        .mount("/", routes![redirect, index])
+        .mount("/", routes![redirect, options_all])
         .register("/", catchers![not_found])
-        .mount("/static", FileServer::from("static"))
+        .mount("/public", FileServer::from("public"))
         .mount("/api/links", routes![new])
         .register(
             "/api/links",
