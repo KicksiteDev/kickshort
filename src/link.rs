@@ -19,16 +19,12 @@ pub struct Link {
     pub hash: String,
     pub visibility: bool,
     pub visitors: i32,
-    pub expires_at: Option<chrono::NaiveDateTime>,
     created_at: chrono::NaiveDateTime,
 }
 
 impl Link {
-    pub async fn insert(url: String, expires_in: Option<usize>, visibility: bool, conn: &DbConn) -> LinkResult {
+    pub async fn insert(url: String, visibility: bool, conn: &DbConn) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
-        let expires_at = expires_in.map(|minutes| {
-            chrono::Utc::now().naive_utc() + chrono::Duration::minutes(minutes as i64)
-        });
         let mut hash = hash_url(&trimmed_url);
 
         // `hash_url` is pretty much guaranteed to be unique, but on the astronomically rare
@@ -40,7 +36,6 @@ impl Link {
         let new_link = NewLink {
             url: trimmed_url,
             hash,
-            expires_at,
             visibility,
         };
 
@@ -99,10 +94,6 @@ impl Link {
         format!("{}/{}", who_am_i, self.hash)
     }
 
-    pub fn expired(&self) -> bool {
-        self.expires_at.is_some() && self.expires_at.unwrap() < chrono::Utc::now().naive_utc()
-    }
-
     fn validate(&self) -> Vec<String> {
         let mut errors = vec![];
 
@@ -132,7 +123,6 @@ struct NewLink {
     url: String,
     hash: String,
     visibility: bool,
-    expires_at: Option<chrono::NaiveDateTime>,
 }
 
 pub type LinkResult = Result<Link, String>;
@@ -145,7 +135,6 @@ pub mod schema {
             hash -> Varchar,
             visibility -> Bool,
             visitors -> Int4,
-
             created_at -> Timestamp,
         }
     }

@@ -35,10 +35,9 @@ pub struct DbConn(diesel::PgConnection);
 #[post("/", data = "<link_data>", format = "application/json")]
 async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
-    let expires_in = link_data.expires_in;
     let visibility = link_data.visibility;
 
-    match Link::insert(url, expires_in, visibility, &conn).await {
+    match Link::insert(url, visibility, &conn).await {
         Ok(link) => APIResult::created(link),
         Err(error) => APIResult::unprocessable_entity(error),
     }
@@ -50,10 +49,6 @@ async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
         Ok(link) => link,
         Err(_) => return Err(Status::NotFound),
     };
-
-    if link.expired() {
-        return Err(Status::NotFound);
-    }
 
     let url = link.url.clone();
 

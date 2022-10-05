@@ -108,8 +108,7 @@ fn redirect_expired() {
             ""
         );
 
-        let mut link = Link::find_by_hash(hash[1..].to_string(), &conn).await.unwrap();
-        link.expires_at = Some(chrono::Utc::now().naive_utc() - chrono::Duration::minutes(100));
+        let link = Link::find_by_hash(hash[1..].to_string(), &conn).await.unwrap();
         link.save(&conn).await.unwrap();
 
         let response = client.get(hash).dispatch().await;
