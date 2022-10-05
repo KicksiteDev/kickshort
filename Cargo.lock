@@ -862,6 +862,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kickshort"
+version = "0.1.0"
+dependencies = [
+ "base64-url",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "fasthash",
+ "map-macro",
+ "parking_lot",
+ "rand 0.8.5",
+ "rocket",
+ "rocket_dyn_templates",
+ "rocket_sync_db_pools",
+ "serde",
+ "url",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2072,25 +2091,6 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
-]
-
-[[package]]
-name = "url_shorten"
-version = "0.1.0"
-dependencies = [
- "base64-url",
- "chrono",
- "diesel",
- "diesel_migrations",
- "fasthash",
- "map-macro",
- "parking_lot",
- "rand 0.8.5",
- "rocket",
- "rocket_dyn_templates",
- "rocket_sync_db_pools",
- "serde",
- "url",
 ]
 
 [[package]]

@@ -81,7 +81,7 @@ fn redirect_not_expired() {
         assert_eq!(response.status(), Status::Created);
 
         let hash = response.into_json::<LinkResponse>().await.unwrap().short_url.replace(
-            env!("WHO_AM_I"),
+            &std::env::var("WHO_AM_I").expect("WHO_AM_I must be set"),
             ""
         );
 
@@ -104,7 +104,7 @@ fn redirect_expired() {
         assert_eq!(response.status(), Status::Created);
 
         let hash = response.into_json::<LinkResponse>().await.unwrap().short_url.replace(
-            env!("WHO_AM_I"),
+            &std::env::var("WHO_AM_I").expect("WHO_AM_I must be set"),
             ""
         );
 

@@ -17,12 +17,14 @@ pub struct Link {
     pub id: i32,
     pub url: String,
     pub hash: String,
+    pub visibility: bool,
+    pub visitors: i32,
     pub expires_at: Option<chrono::NaiveDateTime>,
     created_at: chrono::NaiveDateTime,
 }
 
 impl Link {
-    pub async fn insert(url: String, expires_in: Option<usize>, conn: &DbConn) -> LinkResult {
+    pub async fn insert(url: String, expires_in: Option<usize>, visibility: bool, conn: &DbConn) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
         let expires_at = expires_in.map(|minutes| {
             chrono::Utc::now().naive_utc() + chrono::Duration::minutes(minutes as i64)
@@ -39,6 +41,7 @@ impl Link {
             url: trimmed_url,
             hash,
             expires_at,
+            visibility,
         };
 
         conn.run(move |c| {
@@ -71,8 +74,15 @@ impl Link {
         .await
     }
 
+    pub async fn increment_visitors(self, conn: &DbConn) -> QueryResult<usize> {
+        conn.run(move |c| {
+            diesel::update(&self).set(links::visitors.eq(links::visitors + 1)).execute(c)
+        })
+        .await
+    }
+
     pub async fn delete_all(conn: &DbConn) -> QueryResult<usize> {
-        conn.run(|c| diesel::delete(links::table).execute(c)).await
+        conn.run(move |c| { diesel::delete(links::table).execute(c) }).await
     }
 
     pub async fn save(self, conn: &DbConn) -> LinkResult {
@@ -84,7 +94,7 @@ impl Link {
     }
 
     pub fn redirect_url(&self) -> String {
-        let who_am_i = std::env::var("WHO_AM_I").unwrap_or_else(|_| "idk".to_string());
+        let who_am_i = std::env::var("WHO_AM_I").expect("WHO_AM_I must be set");
 
         format!("{}/{}", who_am_i, self.hash)
     }
@@ -121,6 +131,7 @@ fn hash_url(url: &String) -> String {
 struct NewLink {
     url: String,
     hash: String,
+    visibility: bool,
     expires_at: Option<chrono::NaiveDateTime>,
 }
 
@@ -132,7 +143,9 @@ pub mod schema {
             id -> Int4,
             url -> Varchar,
             hash -> Varchar,
-            expires_at -> Nullable<Timestamp>,
+            visibility -> Bool,
+            visitors -> Int4,
+
             created_at -> Timestamp,
         }
     }

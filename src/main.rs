@@ -32,24 +32,13 @@ use rocket_dyn_templates::{Template, context};
 #[cfg_attr(test, database("url_shorten_test"))]
 pub struct DbConn(diesel::PgConnection);
 
-#[cfg(not(test))]
-const DATABASE_URL: &str = env!("DATABASE_URL");
-
-#[cfg(not(test))]
-const DB_NAME: &str = "url_shorten";
-
-#[cfg(test)]
-const DATABASE_URL: &str = env!("DATABASE_URL_TEST");
-
-#[cfg(test)]
-const DB_NAME: &str = "url_shorten_test";
-
 #[post("/", data = "<link_data>", format = "application/json")]
 async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
     let expires_in = link_data.expires_in;
+    let visibility = link_data.visibility;
 
-    match Link::insert(url, expires_in, &conn).await {
+    match Link::insert(url, expires_in, visibility, &conn).await {
         Ok(link) => APIResult::created(link),
         Err(error) => APIResult::unprocessable_entity(error),
     }
@@ -66,7 +55,14 @@ async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
         return Err(Status::NotFound);
     }
 
-    Ok(Redirect::to(link.url))
+    let url = link.url.clone();
+
+    if link.increment_visitors(&conn).await.is_ok() {
+        Ok(Redirect::to(url))
+    } else {
+        Err(Status::InternalServerError)
+    }
+
 }
 
 // Intentionally empty, but required for preflight
@@ -112,12 +108,24 @@ async fn run_migrations(rocket: Rocket<Build>) -> Rocket<Build> {
 
 #[launch]
 fn rocket() -> _ {
-    PgConnection::establish(DATABASE_URL)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", DATABASE_URL));
+    #[cfg(not(test))]
+    let database_url: &str = &std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+    #[cfg(not(test))]
+    let db_name: &str = "url_shorten";
+
+    #[cfg(test)]
+    let database_url: &str = &std::env::var("DATABASE_URL_TEST").expect("DATABASE_URL_TEST must be set");
+
+    #[cfg(test)]
+    let db_name: &str = "url_shorten_test";
+
+    PgConnection::establish(database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
 
     let figment = rocket::Config::figment()
-        .merge(("databases", map![DB_NAME => map!("url" => DATABASE_URL)]))
-        .merge(("databases", map![DB_NAME => map!("pool_size" => 5)]));
+        .merge(("databases", map![db_name => map!("url" => database_url)]))
+        .merge(("databases", map![db_name => map!("pool_size" => 5)]));
 
     rocket::custom(figment)
         .attach(Cors)

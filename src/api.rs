@@ -7,6 +7,7 @@ use crate::link::Link;
 pub struct LinkRequest {
     pub url: String,
     pub expires_in: Option<usize>,
+    pub visibility: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -19,6 +20,8 @@ pub struct LinkResponse {
     id: i32,
     pub short_url: String,
     expires_at: Option<chrono::NaiveDateTime>,
+    visibility: bool,
+    visitors: i32,
 }
 
 impl From<Link> for LinkResponse {
@@ -27,6 +30,8 @@ impl From<Link> for LinkResponse {
             id: link.id,
             short_url: link.redirect_url(),
             expires_at: link.expires_at,
+            visibility: link.visibility,
+            visitors: link.visitors,
         }
     }
 }
