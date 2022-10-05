@@ -23,6 +23,10 @@ pub struct Link {
 }
 
 impl Link {
+    pub async fn all(conn: &DbConn) -> Result<Vec<Link>, diesel::result::Error> {
+        conn.run(move |c| { links::table.load::<Link>(c) }).await
+    }
+
     pub async fn insert(url: String, visibility: bool, conn: &DbConn) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
         let mut hash = hash_url(&trimmed_url);

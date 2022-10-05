@@ -32,6 +32,14 @@ use rocket_dyn_templates::{Template, context};
 #[cfg_attr(test, database("url_shorten_test"))]
 pub struct DbConn(diesel::PgConnection);
 
+#[get("/", format = "application/json")]
+async fn index(conn: DbConn) -> Result<Json<Vec<Link>>, Status> {
+    match Link::all(&conn).await {
+        Ok(links) => Ok(Json(links)),
+        Err(_) => Err(Status::InternalServerError),
+    }
+}
+
 #[post("/", data = "<link_data>", format = "application/json")]
 async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
@@ -45,7 +53,7 @@ async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
 
 #[get("/<hash>")]
 async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
-    let link = match Link::find_by_hash(hash, &conn).await {
+    let link = match Link::find_by_hash(hash.to_lowercase(), &conn).await {
         Ok(link) => link,
         Err(_) => return Err(Status::NotFound),
     };
@@ -130,7 +138,7 @@ fn rocket() -> _ {
         .mount("/", routes![redirect, options_all])
         .register("/", catchers![not_found])
         .mount("/public", FileServer::from("public"))
-        .mount("/api/links", routes![new])
+        .mount("/api/links", routes![index, new])
         .register(
             "/api/links",
             catchers![unprocessable_entity, bad_request, internal_server_error],
