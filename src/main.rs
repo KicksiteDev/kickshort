@@ -40,6 +40,14 @@ async fn index(conn: DbConn) -> Result<Json<Vec<Link>>, Status> {
     }
 }
 
+#[get("/<id>", format = "application/json")]
+async fn show(id: i32, conn: DbConn) -> Result<Json<Link>, Status> {
+    match Link::find(id, &conn).await {
+        Ok(link) => Ok(Json(link)),
+        Err(_) => Err(Status::NotFound),
+    }
+}
+
 #[post("/", data = "<link_data>", format = "application/json")]
 async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
@@ -138,7 +146,7 @@ fn rocket() -> _ {
         .mount("/", routes![redirect, options_all])
         .register("/", catchers![not_found])
         .mount("/public", FileServer::from("public"))
-        .mount("/api/links", routes![index, new])
+        .mount("/api/links", routes![index, show, new])
         .register(
             "/api/links",
             catchers![unprocessable_entity, bad_request, internal_server_error],

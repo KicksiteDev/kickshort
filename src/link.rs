@@ -61,6 +61,13 @@ impl Link {
         .await
     }
 
+    pub async fn find(id: i32, conn: &DbConn) -> LinkResult {
+        conn.run(move |c| {
+            links::table.find(id).get_result::<Self>(c).map_err(|_| "Link not found".to_string())
+        })
+        .await
+    }
+
     pub async fn find_by_hash(hash: String, conn: &DbConn) -> LinkResult {
         conn.run(move |c| {
             let link = match links::table.filter(links::hash.eq(hash)).first::<Self>(c) {
