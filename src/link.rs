@@ -17,17 +17,18 @@ pub struct Link {
     pub id: i32,
     pub url: String,
     pub hash: String,
-    pub visibility: bool,
+    pub visible: bool,
     pub visitors: i32,
     created_at: chrono::NaiveDateTime,
 }
 
 impl Link {
     pub async fn all(conn: &DbConn) -> Result<Vec<Link>, diesel::result::Error> {
-        conn.run(move |c| { links::table.load::<Link>(c) }).await
+        // load all where visiblity true
+        conn.run(move |c| links::table.filter(links::visible.eq(true)).load(c)).await
     }
 
-    pub async fn insert(url: String, visibility: bool, conn: &DbConn) -> LinkResult {
+    pub async fn insert(url: String, visible: bool, conn: &DbConn) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
         let mut hash = hash_url(&trimmed_url);
 
@@ -40,7 +41,7 @@ impl Link {
         let new_link = NewLink {
             url: trimmed_url,
             hash,
-            visibility,
+            visible,
         };
 
         conn.run(move |c| {
@@ -133,7 +134,7 @@ fn hash_url(url: &String) -> String {
 struct NewLink {
     url: String,
     hash: String,
-    visibility: bool,
+    visible: bool,
 }
 
 pub type LinkResult = Result<Link, String>;
@@ -144,7 +145,7 @@ pub mod schema {
             id -> Int4,
             url -> Varchar,
             hash -> Varchar,
-            visibility -> Bool,
+            visible -> Bool,
             visitors -> Int4,
             created_at -> Timestamp,
         }

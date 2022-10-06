@@ -6,7 +6,7 @@ use crate::link::Link;
 #[derive(Serialize, Deserialize)]
 pub struct LinkRequest {
     pub url: String,
-    pub visibility: bool,
+    pub visible: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -18,7 +18,7 @@ pub struct Error {
 pub struct LinkResponse {
     id: i32,
     pub short_url: String,
-    visibility: bool,
+    visible: bool,
     visitors: i32,
 }
 
@@ -27,7 +27,7 @@ impl From<Link> for LinkResponse {
         LinkResponse {
             id: link.id,
             short_url: link.redirect_url(),
-            visibility: link.visibility,
+            visible: link.visible,
             visitors: link.visitors,
         }
     }

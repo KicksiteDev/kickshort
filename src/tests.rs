@@ -32,7 +32,7 @@ fn invalid_url() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "invalid url", "visibility": true }"#)
+            .body(r#"{"url": "invalid url", "visible": true }"#)
             .dispatch()
             .await;
         assert_eq!(response.status(), Status::UnprocessableEntity);
@@ -46,7 +46,7 @@ fn blank_url() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "", "visibility": true }"#)
+            .body(r#"{"url": "", "visible": true }"#)
             .dispatch()
             .await;
         assert_eq!(response.status(), Status::UnprocessableEntity);
@@ -60,7 +60,7 @@ fn redirect() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "https://www.google.com", "visibility": true }"#)
+            .body(r#"{"url": "https://www.google.com", "visible": true }"#)
             .dispatch()
             .await;
 
