@@ -16,7 +16,7 @@ pub struct Error {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LinkResponse {
-    id: i32,
+    pub id: i32,
     pub short_url: String,
     visible: bool,
     visitors: i32,
@@ -48,6 +48,8 @@ pub enum APIResult {
     Created(Json<LinkResponse>),
     #[response(status = 200)]
     Ok(Json<LinkResponse>),
+    #[response(status = 204)]
+    NoContent(Json<Error>)
 }
 
 #[allow(dead_code)]
@@ -69,5 +71,8 @@ impl APIResult {
     }
     pub fn ok(link: Link) -> Self {
         APIResult::Ok(Json(LinkResponse::from(link)))
+    }
+    pub fn no_content() -> Self {
+        APIResult::NoContent(Json(Error { error: "No content".to_string() }))
     }
 }

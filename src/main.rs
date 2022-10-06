@@ -41,10 +41,10 @@ async fn index(conn: DbConn) -> Result<Json<Vec<Link>>, Status> {
 }
 
 #[get("/<id>", format = "application/json")]
-async fn show(id: i32, conn: DbConn) -> Result<Json<Link>, Status> {
+async fn show(id: i32, conn: DbConn) -> APIResult {
     match Link::find(id, &conn).await {
-        Ok(link) => Ok(Json(link)),
-        Err(_) => Err(Status::NotFound),
+        Ok(link) => APIResult::ok(link),
+        Err(_) => APIResult::not_found("Link not found".to_string()),
     }
 }
 
@@ -59,6 +59,20 @@ async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     }
 }
 
+#[delete("/<id>", format = "application/json")]
+async fn delete(id: i32, conn: DbConn) -> APIResult {
+    let link = match Link::find(id, &conn).await {
+        Ok(link) => link,
+        Err(_) => return APIResult::not_found("Link not found".to_string()),
+    };
+
+    if link.delete(&conn).await {
+        APIResult::no_content()
+    } else {
+        APIResult::internal_server_error("Failed to delete link".to_string())
+    }
+}
+
 #[get("/<hash>")]
 async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
     let link = match Link::find_by_hash(hash.to_lowercase(), &conn).await {
@@ -68,7 +82,7 @@ async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
 
     let url = link.url.clone();
 
-    if link.increment_visitors(&conn).await.is_ok() {
+    if link.increment_visitors(&conn).await {
         Ok(Redirect::to(url))
     } else {
         Err(Status::InternalServerError)
@@ -146,7 +160,7 @@ fn rocket() -> _ {
         .mount("/", routes![redirect, options_all])
         .register("/", catchers![not_found])
         .mount("/public", FileServer::from("public"))
-        .mount("/api/links", routes![index, show, new])
+        .mount("/api/links", routes![index, show, new, delete])
         .register(
             "/api/links",
             catchers![unprocessable_entity, bad_request, internal_server_error],

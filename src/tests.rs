@@ -87,3 +87,51 @@ fn redirect_bad_hash() {
         assert_eq!(response.status(), Status::NotFound);
     })
 }
+
+#[test]
+fn index() {
+    run_test!(|client, conn| {
+        let response = client.get("/api/links").dispatch().await;
+
+        assert_eq!(response.status(), Status::Ok);
+    })
+}
+
+#[test]
+fn show() {
+    run_test!(|client, conn| {
+        let response = client
+            .post("/api/links")
+            .header(Header::new("Content-Type", "application/json"))
+            .body(r#"{"url": "https://www.google.com", "visible": true }"#)
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let id = response.into_json::<LinkResponse>().await.unwrap().id;
+        let response = client.get(format!("/api/links/{}", id)).header(Header::new("Content-Type", "application/json")).dispatch().await;
+
+        assert_eq!(response.status(), Status::Ok);
+    })
+}
+
+#[test]
+fn delete() {
+    run_test!(|client, conn| {
+        let response = client
+            .post("/api/links")
+            .header(Header::new("Content-Type", "application/json"))
+            .body(r#"{"url": "https://www.google.com", "visible": true }"#)
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let id = response.into_json::<LinkResponse>().await.unwrap().id;
+
+        let response = client.delete(format!("/api/links/{}", id)).header(Header::new("Content-Type", "application/json")).dispatch().await;
+
+        assert_eq!(response.status(), Status::NoContent);
+    })
+}

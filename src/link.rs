@@ -81,11 +81,15 @@ impl Link {
         .await
     }
 
-    pub async fn increment_visitors(self, conn: &DbConn) -> QueryResult<usize> {
+    pub async fn increment_visitors(self, conn: &DbConn) -> bool {
         conn.run(move |c| {
-            diesel::update(&self).set(links::visitors.eq(links::visitors + 1)).execute(c)
+            diesel::update(&self).set(links::visitors.eq(links::visitors + 1)).execute(c).is_ok()
         })
         .await
+    }
+
+    pub async fn delete(self, conn: &DbConn) -> bool {
+        conn.run(move |c| diesel::delete(&self).execute(c).is_ok() ).await
     }
 
     pub async fn delete_all(conn: &DbConn) -> QueryResult<usize> {
