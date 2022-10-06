@@ -33,7 +33,7 @@ use rocket_dyn_templates::{Template, context};
 pub struct DbConn(diesel::PgConnection);
 
 #[get("/", format = "application/json")]
-async fn index(conn: DbConn) -> Result<Json<Vec<Link>>, Status> {
+async fn index(conn: DbConn, _api_key: APIKey) -> Result<Json<Vec<Link>>, Status> {
     match Link::all(&conn).await {
         Ok(links) => Ok(Json(links)),
         Err(_) => Err(Status::InternalServerError),
@@ -41,7 +41,7 @@ async fn index(conn: DbConn) -> Result<Json<Vec<Link>>, Status> {
 }
 
 #[get("/<id>", format = "application/json")]
-async fn show(id: i32, conn: DbConn) -> APIResult {
+async fn show(id: i32, conn: DbConn, _api_key: APIKey) -> APIResult {
     match Link::find(id, &conn).await {
         Ok(link) => APIResult::ok(link),
         Err(_) => APIResult::not_found("Link not found".to_string()),
@@ -49,7 +49,7 @@ async fn show(id: i32, conn: DbConn) -> APIResult {
 }
 
 #[post("/", data = "<link_data>", format = "application/json")]
-async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
+async fn new(link_data: Json<LinkRequest>, conn: DbConn, _api_key: APIKey) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
     let visible = link_data.visible;
     let custom_hash = link_data.custom_hash.clone();
@@ -61,7 +61,7 @@ async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
 }
 
 #[delete("/<id>", format = "application/json")]
-async fn delete(id: i32, conn: DbConn) -> APIResult {
+async fn delete(id: i32, conn: DbConn, _api_key: APIKey) -> APIResult {
     let link = match Link::find(id, &conn).await {
         Ok(link) => link,
         Err(_) => return APIResult::not_found("Link not found".to_string()),
@@ -121,6 +121,11 @@ fn unprocessable_entity() -> APIResult {
     )
 }
 
+#[catch(401)]
+fn unauthorized() -> APIResult {
+    APIResult::unauthorized()
+}
+
 async fn run_migrations(rocket: Rocket<Build>) -> Rocket<Build> {
     embed_migrations!();
 
@@ -164,6 +169,6 @@ fn rocket() -> _ {
         .mount("/api/links", routes![index, show, new, delete])
         .register(
             "/api/links",
-            catchers![unprocessable_entity, bad_request, internal_server_error],
+            catchers![unprocessable_entity, bad_request, internal_server_error, unauthorized],
         )
 }

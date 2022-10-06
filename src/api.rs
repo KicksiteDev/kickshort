@@ -1,4 +1,4 @@
-use rocket::serde::json::Json;
+use rocket::{serde::json::Json, request::{FromRequest, Outcome}, Request, http::Status};
 use serde::{Deserialize, Serialize};
 
 use crate::link::Link;
@@ -41,6 +41,8 @@ pub enum APIResult {
     BadRequest(Json<Error>),
     #[response(status = 404)]
     NotFound(Json<Error>),
+    #[response(status = 401)]
+    Unauthorized(Json<Error>),
     #[response(status = 500)]
     InternalServerError(Json<Error>),
     #[response(status = 422)]
@@ -61,6 +63,9 @@ impl APIResult {
     pub fn not_found(error: String) -> Self {
         APIResult::NotFound(Json(Error { error }))
     }
+    pub fn unauthorized() -> Self {
+        APIResult::Unauthorized(Json(Error { error: "Unauthorized".to_string() }))
+    }
     pub fn internal_server_error(error: String) -> Self {
         APIResult::InternalServerError(Json(Error { error }))
     }
@@ -75,5 +80,37 @@ impl APIResult {
     }
     pub fn no_content() -> Self {
         APIResult::NoContent(Json(Error { error: "No content".to_string() }))
+    }
+}
+
+#[derive(Debug)]
+pub enum APIKeyError {
+    Missing,
+    Invalid,
+}
+
+pub struct APIKey(String);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for APIKey {
+    type Error = APIKeyError;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let api_key = request.headers().get_one("X-Authorization");
+        let real_api_key = std::env::var("API_KEY").expect("API_KEY must be set");
+
+        match api_key {
+            Some(key) => {
+                if key == real_api_key {
+                    Outcome::Success(APIKey(key.to_string()))
+                } else {
+                    Outcome::Failure((Status::Unauthorized, APIKeyError::Invalid))
+                }
+            }
+            None => {
+                println!("yo i poopied :(");
+                Outcome::Failure((Status::Unauthorized, APIKeyError::Missing))
+            },
+        }
     }
 }
