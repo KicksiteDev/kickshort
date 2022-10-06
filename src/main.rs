@@ -52,8 +52,9 @@ async fn show(id: i32, conn: DbConn) -> APIResult {
 async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
     let visible = link_data.visible;
+    let custom_hash = link_data.custom_hash.clone();
 
-    match Link::insert(url, visible, &conn).await {
+    match Link::insert(url, visible, custom_hash, &conn).await {
         Ok(link) => APIResult::created(link),
         Err(error) => APIResult::unprocessable_entity(error),
     }

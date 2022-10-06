@@ -7,6 +7,7 @@ use crate::link::Link;
 pub struct LinkRequest {
     pub url: String,
     pub visible: bool,
+    pub custom_hash: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

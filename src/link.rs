@@ -28,15 +28,28 @@ impl Link {
         conn.run(move |c| links::table.filter(links::visible.eq(true)).load(c)).await
     }
 
-    pub async fn insert(url: String, visible: bool, conn: &DbConn) -> LinkResult {
+    pub async fn insert(url: String, visible: bool, custom_hash: Option<String>, conn: &DbConn) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
-        let mut hash = hash_url(&trimmed_url);
 
-        // `hash_url` is pretty much guaranteed to be unique, but on the astronomically rare
-        // chance that it isn't, we'll just keep trying
-        while Link::find_by_hash(hash.clone(), conn).await.is_ok() {
-            hash = hash_url(&trimmed_url);
-        }
+        let hash = match custom_hash.clone() {
+            Some(hash) => {
+                let link = Link::find_by_hash(hash.clone(), conn).await;
+                if link.is_ok() {
+                    return Err("Hash already exists".to_string());
+                }
+
+                hash
+            },
+            None => {
+                let mut hash = hash_url(&trimmed_url);
+
+                while Link::find_by_hash(hash.clone(), conn).await.is_ok() {
+                    hash = hash_url(&trimmed_url);
+                }
+
+                hash
+            },
+        };
 
         let new_link = NewLink {
             url: trimmed_url,
