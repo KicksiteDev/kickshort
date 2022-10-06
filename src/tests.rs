@@ -32,7 +32,7 @@ fn invalid_url() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .header(Header::new("X-Authorization", "secret"))
+            .header(Header::new("X-Api-Key", "secret"))
             .body(r#"{"url": "invalid url", "visible": true }"#)
             .dispatch()
             .await;
@@ -47,7 +47,7 @@ fn blank_url() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .header(Header::new("X-Authorization", "secret"))
+            .header(Header::new("X-Api-Key", "secret"))
             .body(r#"{"url": "", "visible": true }"#)
             .dispatch()
             .await;
@@ -62,7 +62,7 @@ fn redirect() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .header(Header::new("X-Authorization", "secret"))
+            .header(Header::new("X-Api-Key", "secret"))
             .body(r#"{"url": "https://www.google.com", "visible": true }"#)
             .dispatch()
             .await;
@@ -94,7 +94,7 @@ fn redirect_bad_hash() {
 #[test]
 fn index() {
     run_test!(|client, conn| {
-        let response = client.get("/api/links").header(Header::new("X-Authorization", "secret")).dispatch().await;
+        let response = client.get("/api/links").header(Header::new("X-Api-Key", "secret")).dispatch().await;
 
         assert_eq!(response.status(), Status::Ok);
     })
@@ -106,7 +106,7 @@ fn show() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .header(Header::new("X-Authorization", "secret"))
+            .header(Header::new("X-Api-Key", "secret"))
             .body(r#"{"url": "https://www.google.com", "visible": true }"#)
             .dispatch()
             .await;
@@ -116,7 +116,7 @@ fn show() {
         let id = response.into_json::<LinkResponse>().await.unwrap().id;
         let response = client.get(format!("/api/links/{}", id))
                             .header(Header::new("Content-Type", "application/json"))
-                            .header(Header::new("X-Authorization", "secret"))
+                            .header(Header::new("X-Api-Key", "secret"))
                             .dispatch()
                             .await;
 
@@ -130,7 +130,7 @@ fn delete() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .header(Header::new("X-Authorization", "secret"))
+            .header(Header::new("X-Api-Key", "secret"))
             .body(r#"{"url": "https://www.google.com", "visible": true }"#)
             .dispatch()
             .await;
@@ -141,7 +141,7 @@ fn delete() {
 
         let response = client.delete(format!("/api/links/{}", id))
                              .header(Header::new("Content-Type", "application/json"))
-                             .header(Header::new("X-Authorization", "secret"))
+                             .header(Header::new("X-Api-Key", "secret"))
                              .dispatch()
                              .await;
 

@@ -96,7 +96,7 @@ impl<'r> FromRequest<'r> for APIKey {
     type Error = APIKeyError;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let api_key = request.headers().get_one("X-Authorization");
+        let api_key = request.headers().get_one("X-Api-Key");
         let real_api_key = std::env::var("API_KEY").expect("API_KEY must be set");
 
         match api_key {
