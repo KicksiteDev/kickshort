@@ -27,26 +27,12 @@ macro_rules! run_test {
 }
 
 #[test]
-fn invalid_expiration_date() {
-    run_test!(|client, conn| {
-        let response = client
-            .post("/api/links")
-            .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "https://www.google.com", "expires_in": -1 }"#)
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::UnprocessableEntity);
-        assert_eq!(response.into_json::<Error>().await.unwrap().error, "Unprocessable Entity; A data type is most likely wrong");
-    })
-}
-
-#[test]
 fn invalid_url() {
     run_test!(|client, conn| {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "invalid url", "expires_in": 15 }"#)
+            .body(r#"{"url": "invalid url", "visible": true }"#)
             .dispatch()
             .await;
         assert_eq!(response.status(), Status::UnprocessableEntity);
@@ -60,7 +46,7 @@ fn blank_url() {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "", "expires_in": 15 }"#)
+            .body(r#"{"url": "", "visible": true }"#)
             .dispatch()
             .await;
         assert_eq!(response.status(), Status::UnprocessableEntity);
@@ -69,52 +55,25 @@ fn blank_url() {
 }
 
 #[test]
-fn redirect_not_expired() {
+fn redirect() {
     run_test!(|client, _conn| {
         let response = client
             .post("/api/links")
             .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "https://www.google.com", "expires_in": 1000 }"#)
+            .body(r#"{"url": "https://www.google.com", "visible": true }"#)
             .dispatch()
             .await;
 
         assert_eq!(response.status(), Status::Created);
 
         let hash = response.into_json::<LinkResponse>().await.unwrap().short_url.replace(
-            env!("WHO_AM_I"),
+            &std::env::var("WHO_AM_I").expect("WHO_AM_I must be set"),
             ""
         );
 
         let response = client.get(hash).dispatch().await;
 
         assert_eq!(response.status(), Status::SeeOther);
-    })
-}
-
-#[test]
-fn redirect_expired() {
-    run_test!(|client, conn| {
-        let response = client
-            .post("/api/links")
-            .header(Header::new("Content-Type", "application/json"))
-            .body(r#"{"url": "https://www.google.com" }"#)
-            .dispatch()
-            .await;
-
-        assert_eq!(response.status(), Status::Created);
-
-        let hash = response.into_json::<LinkResponse>().await.unwrap().short_url.replace(
-            env!("WHO_AM_I"),
-            ""
-        );
-
-        let mut link = Link::find_by_hash(hash[1..].to_string(), &conn).await.unwrap();
-        link.expires_at = Some(chrono::Utc::now().naive_utc() - chrono::Duration::minutes(100));
-        link.save(&conn).await.unwrap();
-
-        let response = client.get(hash).dispatch().await;
-
-        assert_eq!(response.status(), Status::NotFound);
     })
 }
 

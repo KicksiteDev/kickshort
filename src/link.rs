@@ -17,16 +17,19 @@ pub struct Link {
     pub id: i32,
     pub url: String,
     pub hash: String,
-    pub expires_at: Option<chrono::NaiveDateTime>,
+    pub visible: bool,
+    pub visitors: i32,
     created_at: chrono::NaiveDateTime,
 }
 
 impl Link {
-    pub async fn insert(url: String, expires_in: Option<usize>, conn: &DbConn) -> LinkResult {
+    pub async fn all(conn: &DbConn) -> Result<Vec<Link>, diesel::result::Error> {
+        // load all where visiblity true
+        conn.run(move |c| links::table.filter(links::visible.eq(true)).load(c)).await
+    }
+
+    pub async fn insert(url: String, visible: bool, conn: &DbConn) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
-        let expires_at = expires_in.map(|minutes| {
-            chrono::Utc::now().naive_utc() + chrono::Duration::minutes(minutes as i64)
-        });
         let mut hash = hash_url(&trimmed_url);
 
         // `hash_url` is pretty much guaranteed to be unique, but on the astronomically rare
@@ -38,7 +41,7 @@ impl Link {
         let new_link = NewLink {
             url: trimmed_url,
             hash,
-            expires_at,
+            visible,
         };
 
         conn.run(move |c| {
@@ -59,6 +62,13 @@ impl Link {
         .await
     }
 
+    pub async fn find(id: i32, conn: &DbConn) -> LinkResult {
+        conn.run(move |c| {
+            links::table.find(id).get_result::<Self>(c).map_err(|_| "Link not found".to_string())
+        })
+        .await
+    }
+
     pub async fn find_by_hash(hash: String, conn: &DbConn) -> LinkResult {
         conn.run(move |c| {
             let link = match links::table.filter(links::hash.eq(hash)).first::<Self>(c) {
@@ -71,8 +81,15 @@ impl Link {
         .await
     }
 
+    pub async fn increment_visitors(self, conn: &DbConn) -> QueryResult<usize> {
+        conn.run(move |c| {
+            diesel::update(&self).set(links::visitors.eq(links::visitors + 1)).execute(c)
+        })
+        .await
+    }
+
     pub async fn delete_all(conn: &DbConn) -> QueryResult<usize> {
-        conn.run(|c| diesel::delete(links::table).execute(c)).await
+        conn.run(move |c| { diesel::delete(links::table).execute(c) }).await
     }
 
     pub async fn save(self, conn: &DbConn) -> LinkResult {
@@ -84,13 +101,9 @@ impl Link {
     }
 
     pub fn redirect_url(&self) -> String {
-        let who_am_i = std::env::var("WHO_AM_I").unwrap_or_else(|_| "idk".to_string());
+        let who_am_i = std::env::var("WHO_AM_I").expect("WHO_AM_I must be set");
 
         format!("{}/{}", who_am_i, self.hash)
-    }
-
-    pub fn expired(&self) -> bool {
-        self.expires_at.is_some() && self.expires_at.unwrap() < chrono::Utc::now().naive_utc()
     }
 
     fn validate(&self) -> Vec<String> {
@@ -121,7 +134,7 @@ fn hash_url(url: &String) -> String {
 struct NewLink {
     url: String,
     hash: String,
-    expires_at: Option<chrono::NaiveDateTime>,
+    visible: bool,
 }
 
 pub type LinkResult = Result<Link, String>;
@@ -132,7 +145,8 @@ pub mod schema {
             id -> Int4,
             url -> Varchar,
             hash -> Varchar,
-            expires_at -> Nullable<Timestamp>,
+            visible -> Bool,
+            visitors -> Int4,
             created_at -> Timestamp,
         }
     }

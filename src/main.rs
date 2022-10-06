@@ -32,24 +32,28 @@ use rocket_dyn_templates::{Template, context};
 #[cfg_attr(test, database("url_shorten_test"))]
 pub struct DbConn(diesel::PgConnection);
 
-#[cfg(not(test))]
-const DATABASE_URL: &str = env!("DATABASE_URL");
+#[get("/", format = "application/json")]
+async fn index(conn: DbConn) -> Result<Json<Vec<Link>>, Status> {
+    match Link::all(&conn).await {
+        Ok(links) => Ok(Json(links)),
+        Err(_) => Err(Status::InternalServerError),
+    }
+}
 
-#[cfg(not(test))]
-const DB_NAME: &str = "url_shorten";
-
-#[cfg(test)]
-const DATABASE_URL: &str = env!("DATABASE_URL_TEST");
-
-#[cfg(test)]
-const DB_NAME: &str = "url_shorten_test";
+#[get("/<id>", format = "application/json")]
+async fn show(id: i32, conn: DbConn) -> Result<Json<Link>, Status> {
+    match Link::find(id, &conn).await {
+        Ok(link) => Ok(Json(link)),
+        Err(_) => Err(Status::NotFound),
+    }
+}
 
 #[post("/", data = "<link_data>", format = "application/json")]
 async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
     let url = link_data.url.trim_end_matches('/').to_string();
-    let expires_in = link_data.expires_in;
+    let visible = link_data.visible;
 
-    match Link::insert(url, expires_in, &conn).await {
+    match Link::insert(url, visible, &conn).await {
         Ok(link) => APIResult::created(link),
         Err(error) => APIResult::unprocessable_entity(error),
     }
@@ -57,16 +61,19 @@ async fn new(link_data: Json<LinkRequest>, conn: DbConn) -> APIResult {
 
 #[get("/<hash>")]
 async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
-    let link = match Link::find_by_hash(hash, &conn).await {
+    let link = match Link::find_by_hash(hash.to_lowercase(), &conn).await {
         Ok(link) => link,
         Err(_) => return Err(Status::NotFound),
     };
 
-    if link.expired() {
-        return Err(Status::NotFound);
+    let url = link.url.clone();
+
+    if link.increment_visitors(&conn).await.is_ok() {
+        Ok(Redirect::to(url))
+    } else {
+        Err(Status::InternalServerError)
     }
 
-    Ok(Redirect::to(link.url))
 }
 
 // Intentionally empty, but required for preflight
@@ -112,12 +119,24 @@ async fn run_migrations(rocket: Rocket<Build>) -> Rocket<Build> {
 
 #[launch]
 fn rocket() -> _ {
-    PgConnection::establish(DATABASE_URL)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", DATABASE_URL));
+    #[cfg(not(test))]
+    let database_url: &str = &std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+    #[cfg(not(test))]
+    let db_name: &str = "url_shorten";
+
+    #[cfg(test)]
+    let database_url: &str = &std::env::var("DATABASE_URL_TEST").expect("DATABASE_URL_TEST must be set");
+
+    #[cfg(test)]
+    let db_name: &str = "url_shorten_test";
+
+    PgConnection::establish(database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
 
     let figment = rocket::Config::figment()
-        .merge(("databases", map![DB_NAME => map!("url" => DATABASE_URL)]))
-        .merge(("databases", map![DB_NAME => map!("pool_size" => 5)]));
+        .merge(("databases", map![db_name => map!("url" => database_url)]))
+        .merge(("databases", map![db_name => map!("pool_size" => 5)]));
 
     rocket::custom(figment)
         .attach(Cors)
@@ -127,7 +146,7 @@ fn rocket() -> _ {
         .mount("/", routes![redirect, options_all])
         .register("/", catchers![not_found])
         .mount("/public", FileServer::from("public"))
-        .mount("/api/links", routes![new])
+        .mount("/api/links", routes![index, show, new])
         .register(
             "/api/links",
             catchers![unprocessable_entity, bad_request, internal_server_error],
