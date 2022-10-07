@@ -108,7 +108,6 @@ impl<'r> FromRequest<'r> for APIKey {
                 }
             }
             None => {
-                println!("yo i poopied :(");
                 Outcome::Failure((Status::Unauthorized, APIKeyError::Missing))
             },
         }
