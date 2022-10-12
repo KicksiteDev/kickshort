@@ -1,0 +1,96 @@
+* {
+  font-family: "Hind Vadodara", sans-serif;
+}
+
+html {
+  height: 100vh;
+}
+
+body {
+  overflow: hidden;
+  min-height: 100vh;
+  margin: 0;
+}
+
+p {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.error {
+  margin-left: 10vw;
+  margin-top: 50vw;
+}
+
+.error svg {
+  user-select: none;
+  width: 100px;
+}
+
+.error-wrapper {
+  z-index: 10;
+  color: #5A5A5A;
+  line-height: 1;
+  position: relative;
+  height: 60vw;
+  display: flex;
+  align-items: center;
+}
+
+.error-wrapper::after {
+  content: attr(data-code);
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #f2f2f2;
+  z-index: -1;
+  font-size: 60vw;
+  font-weight: bold;
+  line-height: 0.75;
+}
+
+.oops {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.content {
+  font-size: 1.24rem;
+  font-weight: bold;
+}
+
+@media (min-width: 640px) {
+  .oops {
+    font-size: 4rem;
+  }
+
+  .content {
+    font-size: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .oops {
+    font-size: 6rem;
+    margin-bottom: 24px;
+  }
+
+  .content {
+    font-size: 2rem;
+  }
+
+  .error {
+    margin-top: 30vw;
+  }
+
+  .error svg {
+    width: 240px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .error {
+    margin-top: 20vw;
+  }
+}
