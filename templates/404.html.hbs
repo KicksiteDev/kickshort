@@ -1,14 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="public/favicon.ico">
-  <title>Page Not Found - Kicksite</title>
-</head>
-<body>
-  <h1>404</h1>
-  <p>Page not found</p>
-</body>
-</html>
+{{#*inline "body" }}
+
+<div class="oops">
+  <span>Oops!</span>
+</div>
+<div class="content">
+  <p>You've clicked on a bad link or entered an invalid URL.</p>
+  <p>Please make sure you entered the right URL.</p>
+</div>
+
+{{/inline}}
+
+{{>error_layout}}

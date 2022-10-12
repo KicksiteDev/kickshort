@@ -99,7 +99,12 @@ fn options_all() -> Status {
 
 #[catch(404)]
 fn not_found() -> Template {
-    Template::render("404", context! {})
+    Template::render("404", context! { code: 404 })
+}
+
+#[catch(500)]
+fn internal_server_error_redirect() -> Template {
+    Template::render("500", context! { code: 500 })
 }
 
 #[catch(400)]
@@ -164,7 +169,7 @@ fn rocket() -> _ {
         .attach(DbConn::fairing())
         .attach(AdHoc::on_ignite("Run Migrations", run_migrations))
         .mount("/", routes![redirect, options_all])
-        .register("/", catchers![not_found])
+        .register("/", catchers![not_found, internal_server_error_redirect])
         .mount("/public", FileServer::from("public"))
         .mount("/api/links", routes![index, show, new, delete])
         .register(
