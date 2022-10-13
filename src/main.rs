@@ -99,7 +99,7 @@ fn options_all() -> Status {
 
 #[catch(404)]
 fn not_found() -> Template {
-    Template::render("500", context! { code: 500 })
+    Template::render("404", context! { code: 404 })
 }
 
 #[catch(500)]
