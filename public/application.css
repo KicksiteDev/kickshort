@@ -10,11 +10,20 @@ body {
   overflow: hidden;
   min-height: 100vh;
   margin: 0;
+  background: var(--background);
+
+  --text-content: #5A5A5A;
+  --text-secondary: #F2F2F2;
+  --background: #FFFFFF;
 }
 
 p {
   margin-top: 1rem;
   margin-bottom: 1rem;
+}
+
+.kicksite-text {
+  fill: var(--text-content);
 }
 
 .error {
@@ -29,7 +38,7 @@ p {
 
 .error-wrapper {
   z-index: 10;
-  color: #5A5A5A;
+  color: var(--text-content);
   line-height: 1;
   position: relative;
   height: 60vw;
@@ -42,7 +51,7 @@ p {
   position: absolute;
   top: 0;
   left: 0;
-  color: #f2f2f2;
+  color: var(--text-secondary);
   z-index: -1;
   font-size: 60vw;
   font-weight: bold;
@@ -60,6 +69,10 @@ p {
   font-weight: bold;
 }
 
+.list-item {
+  margin-bottom: 1rem;
+}
+
 @media (min-width: 640px) {
   .oops {
     font-size: 4rem;
@@ -67,6 +80,10 @@ p {
 
   .content {
     font-size: 1.5rem;
+  }
+
+  .list-item {
+    margin-bottom: 3rem;
   }
 }
 
@@ -92,5 +109,13 @@ p {
 @media (min-width: 1920px) {
   .error {
     margin-top: 20vw;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    --text-content: #D9D9D9;
+    --text-secondary: #3B3B3B;
+    --background: #333333;
   }
 }
