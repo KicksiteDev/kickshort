@@ -58,15 +58,15 @@ async fn index(
 
     match Link::paginate(&conn, parsed_page, parsed_per_page).await {
         Ok(paginated_links) => {
-            let (links, page) = paginated_links;
+            let (links, last_page) = paginated_links;
 
-            let next_page = if page == parsed_page {
+            let next_page = if last_page == parsed_page {
                 None
             } else {
-                Some(page)
+                Some(parsed_page + 1)
             };
 
-            let response = PaginatedLinkResponse { links, next_page };
+            let response = PaginatedLinkResponse { links, next_page, last_page };
 
             Ok(Json(response))
         }

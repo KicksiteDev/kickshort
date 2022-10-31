@@ -45,6 +45,7 @@ impl From<Link> for LinkResponse {
 pub struct PaginatedLinkResponse {
     pub links: Vec<Link>,
     pub next_page: Option<i64>,
+    pub last_page: i64,
 }
 
 #[derive(Responder)]
