@@ -1,6 +1,7 @@
 mod api;
 mod cors;
 mod link;
+mod paginate;
 
 #[cfg(test)]
 mod tests;
@@ -26,17 +27,53 @@ use rocket::http::Status;
 use rocket::response::Redirect;
 use rocket::serde::json::Json;
 use rocket::{Build, Rocket};
-use rocket_dyn_templates::{Template, context};
+use rocket_dyn_templates::{context, Template};
 
 #[cfg_attr(not(test), database("url_shorten"))]
 #[cfg_attr(test, database("url_shorten_test"))]
 pub struct DbConn(diesel::PgConnection);
 
-#[get("/", format = "application/json")]
-async fn index(conn: DbConn, _api_key: APIKey) -> Result<Json<Vec<Link>>, Status> {
-    match Link::all(&conn).await {
-        Ok(links) => Ok(Json(links)),
-        Err(_) => Err(Status::InternalServerError),
+#[get("/?<page>&<per_page>", format = "application/json")]
+async fn index(
+    conn: DbConn,
+    page: Option<String>,
+    per_page: Option<String>,
+    _api_key: APIKey,
+) -> Result<Json<PaginatedLinkResponse>, Status> {
+    let parsed_page = match page {
+        Some(page) => match page.parse::<i64>() {
+            Ok(page) => page,
+            Err(_) => return Err(Status::BadRequest),
+        },
+        None => 1,
+    };
+
+    let parsed_per_page = match per_page {
+        Some(per_page) => match per_page.parse::<i64>() {
+            Ok(per_page) => per_page,
+            Err(_) => return Err(Status::BadRequest),
+        },
+        None => paginate::DEFAULT_PER_PAGE,
+    };
+
+    match Link::paginate(&conn, parsed_page, parsed_per_page).await {
+        Ok(paginated_links) => {
+            let (links, last_page) = paginated_links;
+
+            let next_page = if last_page == parsed_page {
+                None
+            } else {
+                Some(parsed_page + 1)
+            };
+
+            let response = PaginatedLinkResponse { links, next_page, last_page };
+
+            Ok(Json(response))
+        }
+        Err(e) => {
+            dbg!(e);
+            Err(Status::InternalServerError)
+        }
     }
 }
 
@@ -53,8 +90,9 @@ async fn new(link_data: Json<LinkRequest>, conn: DbConn, _api_key: APIKey) -> AP
     let url = link_data.url.trim_end_matches('/').to_string();
     let visible = link_data.visible;
     let custom_hash = link_data.custom_hash.clone();
+    let title = link_data.title.clone();
 
-    match Link::insert(url, visible, custom_hash, &conn).await {
+    match Link::insert(url, visible, custom_hash, title, &conn).await {
         Ok(link) => APIResult::created(link),
         Err(error) => APIResult::unprocessable_entity(error),
     }
@@ -88,7 +126,6 @@ async fn redirect(hash: String, conn: DbConn) -> Result<Redirect, Status> {
     } else {
         Err(Status::InternalServerError)
     }
-
 }
 
 // Intentionally empty, but required for preflight
@@ -151,7 +188,8 @@ fn rocket() -> _ {
     let db_name: &str = "url_shorten";
 
     #[cfg(test)]
-    let database_url: &str = &std::env::var("DATABASE_URL_TEST").expect("DATABASE_URL_TEST must be set");
+    let database_url: &str =
+        &std::env::var("DATABASE_URL_TEST").expect("DATABASE_URL_TEST must be set");
 
     #[cfg(test)]
     let db_name: &str = "url_shorten_test";
@@ -174,6 +212,11 @@ fn rocket() -> _ {
         .mount("/api/links", routes![index, show, new, delete])
         .register(
             "/api/links",
-            catchers![unprocessable_entity, bad_request, internal_server_error, unauthorized],
+            catchers![
+                unprocessable_entity,
+                bad_request,
+                internal_server_error,
+                unauthorized
+            ],
         )
 }

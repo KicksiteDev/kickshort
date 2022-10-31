@@ -8,6 +8,7 @@ pub struct LinkRequest {
     pub url: String,
     pub visible: bool,
     pub custom_hash: Option<String>,
+    pub title: Option<String>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -19,8 +20,11 @@ pub struct Error {
 pub struct LinkResponse {
     pub id: i32,
     pub short_url: String,
+    url: String,
+    created_at: chrono::NaiveDateTime,
     visible: bool,
     visitors: i32,
+    title: Option<String>,
 }
 
 impl From<Link> for LinkResponse {
@@ -28,10 +32,20 @@ impl From<Link> for LinkResponse {
         LinkResponse {
             id: link.id,
             short_url: link.redirect_url(),
+            url: link.url,
             visible: link.visible,
             visitors: link.visitors,
+            created_at: link.created_at,
+            title: link.title,
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct PaginatedLinkResponse {
+    pub links: Vec<Link>,
+    pub next_page: Option<i64>,
+    pub last_page: i64,
 }
 
 #[derive(Responder)]
