@@ -4,14 +4,19 @@ use url::Url;
 
 use rand::distributions::{Alphanumeric, DistString};
 
-use crate::DbConn;
+use crate::{
+    paginate::Paginate,
+    DbConn,
+};
 
 use self::schema::links;
 
 const HASH_FUDGE_LENGTH: usize = 6;
 const HASH_LENGTH: usize = 8;
 
-#[derive(Queryable, Insertable, Serialize, Deserialize, Clone, AsChangeset, Identifiable, Debug)]
+#[derive(
+    Queryable, Insertable, Serialize, Deserialize, Clone, AsChangeset, Identifiable, Debug,
+)]
 #[table_name = "links"]
 pub struct Link {
     pub id: i32,
@@ -19,27 +24,46 @@ pub struct Link {
     pub hash: String,
     pub visible: bool,
     pub visitors: i32,
-    created_at: chrono::NaiveDateTime,
+    pub created_at: chrono::NaiveDateTime,
+    pub title: Option<String>,
 }
 
 impl Link {
-    pub async fn all(conn: &DbConn) -> Result<Vec<Link>, diesel::result::Error> {
+    pub async fn paginate(
+        conn: &DbConn,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<Link>, i64), diesel::result::Error> {
         // load all where visiblity true
-        conn.run(move |c| links::table.filter(links::visible.eq(true)).load(c)).await
+        conn.run(move |c| {
+            links::table
+                .filter(links::visible.eq(true))
+                .order(links::created_at.desc())
+                .paginate(page)
+                .per_page(per_page)
+                .load_and_count_pages(c)
+        })
+        .await
     }
 
-    pub async fn insert(url: String, visible: bool, custom_hash: Option<String>, conn: &DbConn) -> LinkResult {
+    pub async fn insert(
+        url: String,
+        visible: bool,
+        custom_hash: Option<String>,
+        title: Option<String>,
+        conn: &DbConn,
+    ) -> LinkResult {
         let trimmed_url = url.trim_end_matches('/').to_string();
 
         let hash = match custom_hash.clone() {
             Some(hash) => {
                 let link = Link::find_by_hash(hash.clone(), conn).await;
                 if link.is_ok() {
-                    return Err("Hash already exists".to_string());
+                    return Err("URL has already been taken".to_string());
                 }
 
                 hash
-            },
+            }
             None => {
                 let mut hash = hash_url(&trimmed_url);
 
@@ -48,13 +72,14 @@ impl Link {
                 }
 
                 hash
-            },
+            }
         };
 
         let new_link = NewLink {
             url: trimmed_url,
             hash,
             visible,
+            title,
         };
 
         conn.run(move |c| {
@@ -77,7 +102,10 @@ impl Link {
 
     pub async fn find(id: i32, conn: &DbConn) -> LinkResult {
         conn.run(move |c| {
-            links::table.find(id).get_result::<Self>(c).map_err(|_| "Link not found".to_string())
+            links::table
+                .find(id)
+                .get_result::<Self>(c)
+                .map_err(|_| "Link not found".to_string())
         })
         .await
     }
@@ -96,17 +124,22 @@ impl Link {
 
     pub async fn increment_visitors(self, conn: &DbConn) -> bool {
         conn.run(move |c| {
-            diesel::update(&self).set(links::visitors.eq(links::visitors + 1)).execute(c).is_ok()
+            diesel::update(&self)
+                .set(links::visitors.eq(links::visitors + 1))
+                .execute(c)
+                .is_ok()
         })
         .await
     }
 
     pub async fn delete(self, conn: &DbConn) -> bool {
-        conn.run(move |c| diesel::delete(&self).execute(c).is_ok() ).await
+        conn.run(move |c| diesel::delete(&self).execute(c).is_ok())
+            .await
     }
 
     pub async fn delete_all(conn: &DbConn) -> QueryResult<usize> {
-        conn.run(move |c| { diesel::delete(links::table).execute(c) }).await
+        conn.run(move |c| diesel::delete(links::table).execute(c))
+            .await
     }
 
     pub async fn save(self, conn: &DbConn) -> LinkResult {
@@ -132,6 +165,12 @@ impl Link {
             errors.push("Invalid URL".to_string());
         }
 
+        if let Some(title) = &self.title {
+            if title.len() > 255 {
+                errors.push("Title cannot be over 255 characters".to_string());
+            }
+        }
+
         errors
     }
 }
@@ -152,6 +191,7 @@ struct NewLink {
     url: String,
     hash: String,
     visible: bool,
+    title: Option<String>,
 }
 
 pub type LinkResult = Result<Link, String>;
@@ -165,6 +205,7 @@ pub mod schema {
             visible -> Bool,
             visitors -> Int4,
             created_at -> Timestamp,
+            title -> Nullable<Varchar>,
         }
     }
 }
