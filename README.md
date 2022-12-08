@@ -12,7 +12,7 @@ export WHO_AM_I=localhost:8000
 export API_KEY=secret
 ```
 4. Install diesel
-```cargo install disel@1.4.1 --no-features --features postgres```
+```cargo install diesel_cli@1.4.1 --no-default-features --features postgres```
 5. Setup the DBs
 ```
 diesel setup
